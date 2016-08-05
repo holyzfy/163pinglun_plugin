@@ -1,0 +1,15 @@
+@charset "utf-8";
+.commentlist li {margin-bottom:25px; padding-bottom:25px; border-bottom:1px dashed #afafb0;}
+span.comment-author {float:left; display: inline !important; margin: 0 !important;}
+span.comment-author, span.comment-author a {color:#1e50a2;}
+span.comment-author .ip, span.comment-author .cGray {color:#666;}
+.comment-awaiting-moderation, .comment-meta {float:right; color:#666;}
+.comment-awaiting-moderation {color:#e51400;}
+.comment-meta a {color:#666; text-decoration:underline;}
+.comment-meta a:hover {color:#1ba1e2;}
+.tie-content {clear:both; padding-top:5px; font-size:14px;}
+.commentBox {padding:3px; background:#ffffee; border:1px solid #999; overflow:hidden; margin-bottom:12px; word-wrap:break-word;}
+.midOfCommentBox {border-top:0; margin-bottom:3px;}
+.commentInfo {position:relative; margin:0 3px; line-height:18px; height:20px; overflow:hidden; font-size:12px;}
+.floorCount {float:right; color:#666;}
+p.content {margin:0 3px;}
