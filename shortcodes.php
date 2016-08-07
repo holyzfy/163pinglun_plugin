@@ -7,19 +7,15 @@ function result_func() {
 	
 	switch($status) {
 	case 'empty':
-		//评论网址不能为空
-		$result =get_tie_form(__('评论网址不能为空'));
+		$result  =get_tie_form(__('请填写评论网址'));
 		break;
 	case 'fail':
-		//不能读取评论内容，请检查网址是否正确
-		$result =get_tie_form(__($error_msg ? $error_msg : '不能读取评论内容，请检查网址是否正确.'));
+		$result = get_tie_form(__($error_msg ? $error_msg : '不能读取评论内容，请检查网址是否正确.'));
 		break;
 	case 'existed':
-		//评论已存在
 		$result = get_result(__('该评论已存在'), $comment_id, 'warning');
 		break;
 	case 'succ':
-		//评论已提交
 		$result = get_result(__('评论已提交'), $comment_id, 'succ');
 		break;
 	default:
@@ -38,8 +34,8 @@ function get_result($title, $comment_id, $cls = '') {
 	if(json_last_error() != JSON_ERROR_NONE) {
 		wp_die(__('出错：不能正确解析评论内容'));
 	}
-	$last_index = count($json);
-	$excerpt = $json[$last_index]['b'];
+	$length = count($json);
+	$excerpt = $json[$length - 1]['content'];
 
 	return <<<EOT
 <div class="result $cls">

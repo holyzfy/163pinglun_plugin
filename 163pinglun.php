@@ -1,12 +1,12 @@
 <?php
 /*
-Plugin Name: 163pinglun
+Plugin Name: 163pinglun_old
 Description: 分享最精彩的网易评论
 Version: 1.1
 Author: zhaofuyun
 */
 if(!defined('ZFY163PINGLUN_VERSION')) {
-	define('ZFY163PINGLUN_VERSION', '1.0');
+	define('ZFY163PINGLUN_VERSION', '1.1');
 }
 
 require_once(ABSPATH . 'wp-includes/pluggable.php');
@@ -90,21 +90,24 @@ if(!function_exists('my_comments_open')) {
 	}
 }
 
+if(!function_exists('sort_by_level')) {
+	function sort_by_level($a, $b) {
+	    if ($a['buildLevel'] == $b['buildLevel']) {
+	        return 0;
+	    }
+	    return ($a['buildLevel'] < $b['buildLevel']) ? -1 : 1;
+	}
+}
+
 if(!function_exists('get_tie_data')) {
 	function get_tie_data($tie_url) {
-		$result = wp_cache_get('tieCache');
-		if($result) {
-			return $result;
-		}
-
-		$host = parse_url($tie_url, PHP_URL_HOST);
 		$path = parse_url($tie_url, PHP_URL_PATH);
-		$arr = preg_split('/[\/\\\]/', substr($path, 1, -5));
-		$board_id = $arr[0];
-		$thread_id = $arr[1]."_".$arr[2];
-		$data_url = 'http://'.$host.'/data/'.$board_id.'/re/'.$thread_id.'_1.html';
-		$url = $data_url;
-		// $url = 'http://api.yiifcms.com/get_content.php?url=' . urlencode($data_url);
+		$arr = preg_split('/[\/\.]/', $path);
+		$thread_id = $arr[2];
+		$comment_id = $arr[2] . '_' . $arr[3];
+		$product_key = 'a2869674571f77b5a0867c3d71db5856';
+		$url = 'http://comment.news.163.com/api/v1/products/' . $product_key . '/threads/' . $thread_id . '/comments/' . $comment_id;
+		
 		$request = new WP_Http;
 		$data = $request->get($url, array('timeout' => 120));
 		if(is_wp_error($data)) {
@@ -112,7 +115,6 @@ if(!function_exists('get_tie_data')) {
 				'status' => 0,
 				'msg' => $data->get_error_message()
 			);
-			wp_cache_set('tieCache', $result);
 			return $result;
 		}
 
@@ -122,31 +124,28 @@ if(!function_exists('get_tie_data')) {
 				'status' => 0,
 				'msg' => '跟帖已被小偏删除了'
 			);
-			wp_cache_set('tieCache', $result);
 			return $result;
 		}
 
-		preg_match('/var replyDataOne=(.+);$/is', $data['body'], $matches_json);
-		$json = json_decode($matches_json[1], true);
-		$errCode = json_last_error();
+		$json = json_decode($data['body'], true);
+		$err_code = json_last_error();
 		if(!$json) {
 			$result = array(
 				'status' => 0,
 				'msg' => '解析评论数据遇到格式错误'
 			);
-		} else if($errCode != JSON_ERROR_NONE) {
+		} else if($err_code != JSON_ERROR_NONE) {
 			$result = array(
 				'status' => 0,
-				'msg' => "解析评论数据遇到格式错误，错误代码：". $errCode
+				'msg' => "解析评论数据遇到格式错误，错误代码：" . $err_code
 			);
 		} else {
-			unset($json['postData']['d']);
+			usort($json['comments'], 'sort_by_level');
 			$result = array(
 				'status' => 1,
-				'data' => $json
+				'data' => $json['comments']
 			);
 		}
-		wp_cache_set('tieCache', $result);
 		return $result;		
 	}
 }
@@ -213,55 +212,119 @@ if(!function_exists('validate')) {
 	}
 }
 
-if(!function_exists('get_tie')) {
-	function get_tie($comment_id, $post_data) {
-		$tie_content = '';
-		$post_data_length = count($post_data);
-		if($post_data_length > 1) {
-			//生成一楼的内容
-			$author = $post_data[1]['f'];
-			$content = $post_data[1]['b'];
-			$tie_content = '<div class="commentBox"><div class="commentInfo"><span class="comment-author">'.$author.'</span><span class="floorCount">1</span></div><p class="content">'.$content.'</p></div>';
-			
-			//追加二楼至倒数第二楼的内容
-			for($i = 2; $i < $post_data_length; $i++) {
-				$author = $post_data[$i]['f'];
-				$content = $post_data[$i]['b'];
-				$classname = '';
-				if($i > 9 && $i < $post_data_length - 10) {
-					$tie_content .= '<div class="commentBox midOfCommentBox">'.'<div class="commentInfo"><span class="comment-author">'.$author.'</span><span class="floorCount">'.$i.'</span></div><p class="content">'.$content.'</p></div>';
-				} else {
-					$tie_content = '<div class="commentBox">'.$tie_content.'<div class="commentInfo"><span class="comment-author">'.$author.'</span><span class="floorCount">'.$i.'</span></div><p class="content">'.$content.'</p></div>';
-				}
-			}
-			
-		}
-		//追加最后一楼的内容
-		$author = $post_data[$post_data_length]['f'];
-		$content = $post_data[$post_data_length]['b'];
-		$post_time = $post_data[$post_data_length]['t'];
-		$tie_content = $tie_content.'<p class="content">'.$content.'</p>';
-		$from = ' '.get_comment_author_link($comment_id).' ';
-		return '<span class="comment-author">'.$author.'</span><span class="comment-meta">'.$post_time.$from.'推荐</span><div class="tie-content">'.$tie_content.'</div>';
+if(!function_exists('get_username')) {
+	function get_username($comment) {
+	    if(empty($comment['user']['nickname'])) {
+	        $nickname = '(' . $comment['ip'] . ')';
+	    } else {
+	        $nickname = '[' . $comment['user']['nickname'] . ']';
+	    }
+	    return '网易' . $nickname . '的原贴：';
 	}
+}
+
+if(!function_exists('get_tie')) {
+	function get_tie($comment_id, $comments) {
+	    $tie_content = '';
+	    $comments_length = count($comments);
+	    if($comments_length > 1) {
+	        //生成一楼的内容
+	        $author = get_username($comments[0]);
+	        $content = $comments[0]['content'];
+	        $tie_content = '<div class="commentBox"><div class="commentInfo"><span class="comment-author">'.$author.'</span><span class="floorCount">1</span></div><p class="content">'.$content.'</p></div>';
+	        
+	        //追加二楼至倒数第二楼的内容
+	        for($i = 1; $i < $comments_length - 1; $i++) {
+	            $author = get_username($comments[$i]);
+	        	$floor = $comments[$i]['buildLevel'];
+	            $content = $comments[$i]['content'];
+	            $classname = '';
+	            if($i > 9 && $i < $comments_length - 10) {
+	                $tie_content .= '<div class="commentBox midOfCommentBox">'.'<div class="commentInfo"><span class="comment-author">'.$author.'</span><span class="floorCount">'.$floor.'</span></div><p class="content">'.$content.'</p></div>';
+	            } else {
+	                $tie_content = '<div class="commentBox">'.$tie_content.'<div class="commentInfo"><span class="comment-author">'.$author.'</span><span class="floorCount">'.$floor.'</span></div><p class="content">'.$content.'</p></div>';
+	            }
+	        }
+	        
+	    }
+	    //追加最后一楼的内容
+	    $last_comment = $comments[$comments_length - 1];
+	    $author = get_username($last_comment);
+	    $content = $last_comment['content'];
+	    $post_time = $last_comment['createTime'];
+	    $tie_content = $tie_content.'<p class="content">'.$content.'</p>';
+	    $from = ' '.get_comment_author_link($comment_id).' ';
+	    return '<span class="comment-author">'.$author.'</span><span class="comment-meta">'.$post_time.$from.'推荐</span><div class="tie-content">'.$tie_content.'</div>';
+	}
+}
+
+if(!function_exists('get_article')) {
+    function get_article($tie_url) {
+        $path = parse_url($tie_url, PHP_URL_PATH);
+        $arr = preg_split('/[\/\.]/', $path);
+        $thread_id = $arr[2];
+        $product_key = 'a2869674571f77b5a0867c3d71db5856';
+        $url = 'http://comment.news.163.com/api/v1/products/' . $product_key . '/threads/' . $thread_id;
+        
+        $request = new WP_Http;
+        $data = $request->get($url, array('timeout' => 120));
+        if(is_wp_error($data)) {
+            $result = array(
+                'status' => 0,
+                'msg' => $data->get_error_message()
+            );
+            return $result;
+        }
+
+        $httpCode = $data['response']['code'];
+        if($httpCode != 200) {
+            $result = array(
+                'status' => 0,
+                'msg' => '跟帖已被小偏删除了'
+            );
+            return $result;
+        }
+
+        $json = json_decode($data['body'], true);
+        $err_code = json_last_error();
+        if(!$json) {
+            $result = array(
+                'status' => 0,
+                'msg' => '解析评论数据遇到格式错误'
+            );
+        } else if($err_code != JSON_ERROR_NONE) {
+            $result = array(
+                'status' => 0,
+                'msg' => "解析评论数据遇到格式错误，错误代码：" . $err_code
+            );
+        } else {
+            $result = array(
+                'status' => 1,
+                'data' => $json
+            );
+        }
+
+        return $result;
+    }
 }
 
 add_filter('preprocess_comment', 'insert_post_if_not_existed');
 if(!function_exists('insert_post_if_not_existed')) {
-	function insert_post_if_not_existed($commentdata) {
+	function insert_post_if_not_existed($comment) {
 		//如果文章不存在，则创建文章
 		global $wpdb;
-		preg_match('/(http.+html)/i', $commentdata['comment_content'], $matches);
+		preg_match('/(http.+html)/i', $comment['comment_content'], $matches);
 		$tie_url = $matches[1];
-		$result = get_tie_data($tie_url);	
-		if(0 == $result['status']) {
-			wp_die(__('<h2 class="entry-title" style="color:#f00;">老兄，程序出错啦，'. $result['msg'] .'请返回首页重试</h2>'
+
+		$article = get_article($tie_url);
+		$newComment = get_tie_data($tie_url);	
+		if(0 == $newComment['status'] || 0 == $article['status']) {
+			wp_die(__('<h2 class="entry-title" style="color:#f00;">老兄，程序出错啦，'. $newComment['msg'] .'请返回首页重试</h2>'
 					.'<div>您刚才提交的评论地址：' . $tie_url . '</div>'));
 		}
-		
-		$data = $result['data'];
-		$news_title = $data['thread']['title'];
-		$news_url = $data['thread']['url'];
+
+		$news_title = $article['data']['title'];
+		$news_url = $article['data']['url'];
 		$table = $wpdb->prefix . '163pinglun';
 		$post_id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM $table WHERE news_url=%s", $news_url));
 		if(!$post_id) {
@@ -282,22 +345,27 @@ if(!function_exists('insert_post_if_not_existed')) {
 		if ( $user->ID ) {
 			if ( empty( $user->display_name ) )
 				$user->display_name=$user->user_login;
-			$commentdata['comment_author'] = $wpdb->escape($user->display_name);
-			$commentdata['comment_author_url'] = $wpdb->escape($user->user_url);
+			$comment['comment_author'] = $wpdb->escape($user->display_name);
+			$comment['comment_author_url'] = $wpdb->escape($user->user_url);
 		}
 		
-		if(!$commentdata['comment_author']) {
-			$commentdata['comment_author'] = __('阿猫阿狗');
+		if(!$comment['comment_author']) {
+			$comment['comment_author'] = __('阿猫阿狗');
 		}
-		$commentdata['comment_post_ID'] = $post_id;
-		$commentdata['comment_content'] = $tie_url;
-		$post_data = json_encode($data['postData']);
+		$comment['comment_post_ID'] = $post_id;
+		$comment['comment_content'] = $tie_url;
 
 		//向wp_163pinglun表中插入一行数据
 		$table = $wpdb->prefix . '163pinglun';
-		$wpdb->insert($table, array('tie_url' => $tie_url, 'news_url' => $news_url, 'post_id' => $post_id, 'comment_id' => -1, 'content_json_data' => $post_data), array('%s', '%s', '%d', '%d', '%s'));	
-		
-		return $commentdata;
+		$wpdb->insert($table, array('tie_url' => $tie_url, 'news_url' => $news_url, 'post_id' => $post_id, 'comment_id' => -1, 'content_json_data' => json_encode($newComment['data'])), array('%s', '%s', '%d', '%d', '%s'));	
+
+		$comments = $newComment['data'];
+		$author = get_username($comments[0]);
+		$content = $comments[0]['content'];
+		$post_description = substr(strip_tags($author . $content), 0, 350);
+		update_post_meta($post_id, 'post_description', $post_description);
+
+		return $comment;
 	}
 }
 
@@ -316,9 +384,8 @@ if(!function_exists('set_latest_comment_as_excerpt')) {
 				if(($json_error_code = json_last_error()) != JSON_ERROR_NONE) {
 					wp_die(__('老兄，程序出错啦：不能正确解析评论内容 @wp_set_comment_status. JSON ERROR CODE=' . $json_error_code));
 				}
-				$last_index = count($json);
-				$excerpt = $json[$last_index]['b'];
-				//$wpdb->update($wpdb->prefix . 'posts', array('post_excerpt' => $excerpt), array('ID' => $row->post_id), array('%s'), array('%d'));
+				$length = count($json);
+				$excerpt = $json[$length - 1]['content'];
 				
 				//Note that when the post is "updated", the existing Post record is duplicated for audit/revision purposes. 
 				//@see http://codex.wordpress.org/Function_Reference/wp_update_post
