@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: 163pinglun_old
+Plugin Name: 163pinglun
 Description: 分享最精彩的网易评论
 Version: 1.1
 Author: zhaofuyun
@@ -411,12 +411,13 @@ if(!function_exists('insert_163pinglun')) {
 			
 		//替换评论内容
 		$content_json_data = $wpdb->get_var($wpdb->prepare("SELECT content_json_data FROM $table WHERE comment_id = %d", $id));
-		$tie = get_tie($id, json_decode($content_json_data, true));
 		if(($json_error_code = json_last_error()) != JSON_ERROR_NONE) {
 			wp_die(__('老兄，程序出错啦：不能正确解析评论内容 @wp_insert_comment. JSON ERROR CODE=' . $json_error_code));
 		}
-		$wpdb->update($wpdb->prefix . 'comments', array('comment_content' => $tie), array('comment_ID' => $id), array('%s'), array('%d'));
-		
+		wp_update_comment(array(
+			"comment_ID" => $id,
+			"comment_content" => get_tie($id, json_decode($content_json_data, true))
+		));
 		//如果当前评论所在的文章还没有通过审核的评论，那么把当前评论设置为通过审核（得保证文章里至少能看到一条评论吧）
 		$post_id = $comment->comment_post_ID;
 		$post = get_post($post_id);
