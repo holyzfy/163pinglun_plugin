@@ -554,6 +554,22 @@ function slug_get_comment($comment, $field_name, $request) {
     }
 };
 
+add_action('rest_api_init', function () {
+    register_rest_route('163pinglun/v1', '/random_posts', array(
+        'methods' => 'GET',
+        'callback' => 'random_posts',
+    ));
+});
+
+function random_posts () {
+    return get_posts(array(
+        'numberposts' => 10,
+        'orderby' => 'rand',
+        'post_type' => 'post',
+        'post_status' => 'publish'
+    ));
+}
+
 include_once 'shortcodes.php';
 include_once 'tie-form.php';
 ?>
