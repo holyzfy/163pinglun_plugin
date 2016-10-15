@@ -527,6 +527,8 @@ function slug_get_postmeta( $post, $field_name, $request ) {
             unset($fields[$key]);
         }
     }
+
+    $fields['author_nickname'] = get_the_author_meta('nickname', $post['author']);
     return $fields;
 }
 
